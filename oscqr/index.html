@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>OSCQR Interactive Checklist</title>
+
+<style>
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        background: #f4f7fb;
+        color: #222;
+        line-height: 1.5;
+    }
+
+    header {
+        background: #00539b;
+        color: white;
+        padding: 1.5rem;
+        text-align: center;
+    }
+
+    main {
+        max-width: 900px;
+        margin: auto;
+        padding: 1rem;
+    }
+
+    .progress-container {
+        margin: 1rem 0 2rem;
+    }
+
+    .progress-bar {
+        width: 100%;
+        height: 24px;
+        background: #ddd;
+        border-radius: 20px;
+        overflow: hidden;
+    }
+
+    .progress-fill {
+        height: 100%;
+        width: 0%;
+        background: #28a745;
+        transition: width 0.3s ease;
+    }
+
+    .progress-text {
+        margin-top: 0.5rem;
+        font-weight: bold;
+    }
+
+    .checklist-item {
+        background: white;
+        border-radius: 12px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    .item-top {
+        display: flex;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    input[type="checkbox"] {
+        transform: scale(1.4);
+        margin-top: 0.3rem;
+        cursor: pointer;
+    }
+
+    label {
+        font-weight: bold;
+        cursor: pointer;
+        flex: 1;
+    }
+
+    textarea {
+        width: 100%;
+        margin-top: 1rem;
+        min-height: 70px;
+        resize: vertical;
+        padding: 0.75rem;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        font-family: inherit;
+    }
+
+    .completed label {
+        text-decoration: line-through;
+        color: #666;
+    }
+
+    .button-row {
+        display: flex;
+        gap: 1rem;
+        flex-wrap: wrap;
+        margin-top: 2rem;
+    }
+
+    button {
+        padding: 0.9rem 1.2rem;
+        border: none;
+        border-radius: 8px;
+        background: #00539b;
+        color: white;
+        cursor: pointer;
+        font-size: 1rem;
+    }
+
+    button:hover {
+        background: #003f75;
+    }
+
+    footer {
+        text-align: center;
+        padding: 2rem;
+        color: #555;
+        font-size: 0.9rem;
+    }
+
+    @media (max-width: 600px) {
+        .item-top {
+            align-items: flex-start;
+        }
+    }
+</style>
+</head>
+<body>
+
+<header>
+    <h1>OSCQR Interactive Checklist</h1>
+    <p>Overview & Information Standards</p>
+</header>
+
+<main>
+
+    <section class="progress-container" aria-label="Progress">
+        <div class="progress-bar">
+            <div class="progress-fill" id="progressFill"></div>
+        </div>
+        <div class="progress-text" id="progressText">0% Complete</div>
+    </section>
+
+    <section id="checklist"></section>
+
+    <div class="button-row">
+        <button id="resetBtn">Reset Checklist</button>
+    </div>
+
+</main>
+
+<footer>
+    Based on OSCQR Overview & Information standards from SUNY OSCQR.
+</footer>
+
+<script>
+const checklistData = [
+    "Course includes Welcome and Getting Started content.",
+    "Course provides an overall orientation or overview.",
+    "Course includes a clear course information area and syllabus.",
+    "A printable syllabus is available.",
+    "Course includes links to campus policies.",
+    "Course provides learner success resources.",
+    "Course information states whether the course is online, blended, or web-enhanced.",
+    "Course provides technical participation guidelines.",
+    "Course objectives/outcomes are clearly defined and measurable.",
+    "Course provides instructor, department, and program contact information."
+];
+
+const checklistContainer = document.getElementById("checklist");
+const progressFill = document.getElementById("progressFill");
+const progressText = document.getElementById("progressText");
+
+function saveData() {
+    const items = [];
+
+    document.querySelectorAll(".checklist-item").forEach((item, index) => {
+        items.push({
+            checked: item.querySelector("input").checked,
+            notes: item.querySelector("textarea").value
+        });
+    });
+
+    localStorage.setItem("oscqrChecklist", JSON.stringify(items));
+}
+
+function loadData() {
+    return JSON.parse(localStorage.getItem("oscqrChecklist")) || [];
+}
+
+function updateProgress() {
+    const checkboxes = document.querySelectorAll("input[type='checkbox']");
+    const checked = document.querySelectorAll("input[type='checkbox']:checked").length;
+
+    const percent = Math.round((checked / checkboxes.length) * 100);
+
+    progressFill.style.width = percent + "%";
+    progressText.textContent = `${percent}% Complete (${checked}/${checkboxes.length})`;
+}
+
+function buildChecklist() {
+    const saved = loadData();
+
+    checklistData.forEach((text, index) => {
+
+        const item = document.createElement("article");
+        item.className = "checklist-item";
+
+        const checked = saved[index]?.checked || false;
+        const notes = saved[index]?.notes || "";
+
+        if (checked) {
+            item.classList.add("completed");
+        }
+
+        item.innerHTML = `
+            <div class="item-top">
+                <input 
+                    type="checkbox" 
+                    id="item-${index}" 
+                    ${checked ? "checked" : ""}
+                    aria-label="${text}"
+                >
+
+                <label for="item-${index}">
+                    ${index + 1}. ${text}
+                </label>
+            </div>
+
+            <textarea 
+                placeholder="Add notes or evidence here..."
+                aria-label="Notes for item ${index + 1}"
+            >${notes}</textarea>
+        `;
+
+        const checkbox = item.querySelector("input");
+        const textarea = item.querySelector("textarea");
+
+        checkbox.addEventListener("change", () => {
+            item.classList.toggle("completed", checkbox.checked);
+            saveData();
+            updateProgress();
+        });
+
+        textarea.addEventListener("input", saveData);
+
+        checklistContainer.appendChild(item);
+    });
+
+    updateProgress();
+}
+
+document.getElementById("resetBtn").addEventListener("click", () => {
+    if (confirm("Reset all checklist data?")) {
+        localStorage.removeItem("oscqrChecklist");
+        location.reload();
+    }
+});
+
+buildChecklist();
+</script>
+
+</body>
+</html>
