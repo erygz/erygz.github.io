@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>I love you, Jason</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #1a0010;
+      font-family: Georgia, 'Times New Roman', serif;
+      overflow: hidden;
+      position: relative;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .card {
+      position: relative;
+      z-index: 20;
+      text-align: center;
+      padding: 3rem 2.5rem;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid rgba(255, 180, 200, 0.2);
+      border-radius: 28px;
+      backdrop-filter: blur(14px);
+      max-width: 440px;
+      width: calc(100% - 2rem);
+    }
+
+    .big-heart {
+      font-size: clamp(3.5rem, 12vw, 5.5rem);
+      display: block;
+      margin-bottom: 0.75rem;
+      animation: heartbeat 1.4s ease-in-out infinite;
+      transform-origin: center;
+    }
+
+    @keyframes heartbeat {
+      0%,100% { transform: scale(1); }
+      14%      { transform: scale(1.18); }
+      28%      { transform: scale(1); }
+      42%      { transform: scale(1.12); }
+      56%      { transform: scale(1); }
+    }
+
+    h1 {
+      font-size: clamp(1.5rem, 5vw, 2rem);
+      font-weight: 400;
+      color: #ffd6e0;
+      margin-bottom: 0.5rem;
+      letter-spacing: 0.02em;
+      font-style: italic;
+    }
+
+    p {
+      color: rgba(255, 200, 215, 0.5);
+      font-size: 0.92rem;
+      margin-bottom: 2rem;
+      line-height: 1.5;
+    }
+
+    #love-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.9rem 2.4rem;
+      font-size: 1.05rem;
+      font-weight: 600;
+      font-family: Georgia, serif;
+      color: #fff;
+      background: linear-gradient(135deg, #ff4d6d, #c9184a, #ff758c, #ff4d6d);
+      background-size: 300% 300%;
+      border: none;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      animation: pinkShift 5s ease infinite;
+    }
+
+    @keyframes pinkShift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    #love-btn:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 8px 32px rgba(255, 77, 109, 0.5);
+    }
+
+    #love-btn:active {
+      transform: scale(0.97);
+      box-shadow: none;
+    }
+
+    #love-btn:focus-visible {
+      outline: 3px solid #ff758c;
+      outline-offset: 4px;
+    }
+
+    #counter {
+      margin-top: 1.5rem;
+      font-size: 0.85rem;
+      font-style: italic;
+      color: rgba(255, 180, 200, 0.3);
+      min-height: 1.2em;
+      transition: color 0.4s;
+    }
+
+    #counter.lit { color: rgba(255, 180, 200, 0.65); }
+
+    .glow {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 0;
+      filter: blur(80px);
+      opacity: 0.18;
+    }
+  </style>
+</head>
+<body>
+
+<!-- =====================================================================
+     EDITABLE CONTENT — change these to customise the page
+===================================================================== -->
+<script>
+  const CONFIG = {
+    emoji:         "❤️",
+    heading:       "I love you, Jason",
+    subtext:       "Press the button. As many times as you like.",
+    buttonLabel:   "❤️ Send love",
+    counterLabel:  (n) => n === 1 ? "1 heart sent ❤️" : `${n} hearts sent ❤️`,
+    particleCount: 60,
+    wordParticles: ["I love you", "Jason ❤️", "💕", "Always", "Forever", "xoxo", "💖", "You & me"],
+    heartColors:   ["#ff4d6d","#ff758c","#ff8fa3","#ffb3c1","#ffccd5","#c9184a","#a4133c","#ff006e","#fb5607"],
+    wordColor:     "#ffccd5",
+  };
+</script>
+<!-- ===================================================================== -->
+
+<canvas id="canvas" aria-hidden="true"></canvas>
+
+<div class="glow" style="width:500px;height:500px;background:#c9184a;top:-100px;left:-150px;"></div>
+<div class="glow" style="width:400px;height:400px;background:#a4133c;bottom:-100px;right:-100px;"></div>
+
+<main class="card" role="main">
+  <span class="big-heart" aria-hidden="true" id="hero-emoji"></span>
+  <h1 id="heading"></h1>
+  <p id="subtext"></p>
+  <button id="love-btn" aria-label="Send love"></button>
+  <div id="counter" aria-live="polite" aria-atomic="true"></div>
+</main>
+
+<script>
+  (function () {
+    const $ = id => document.getElementById(id);
+
+    $("hero-emoji").textContent = CONFIG.emoji;
+    $("heading").textContent    = CONFIG.heading;
+    $("subtext").textContent    = CONFIG.subtext;
+    $("love-btn").textContent   = CONFIG.buttonLabel;
+
+    const canvas = $("canvas");
+    const ctx    = canvas.getContext("2d");
+    let pieces   = [];
+    let raf      = null;
+    let count    = 0;
+
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function rand(min, max) { return Math.random() * (max - min) + min; }
+
+    function heartPath(ctx, cx, cy, size) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy + size * 0.3);
+      ctx.bezierCurveTo(cx, cy, cx - size * 0.5, cy, cx - size * 0.5, cy - size * 0.25);
+      ctx.bezierCurveTo(cx - size * 0.5, cy - size * 0.6, cx, cy - size * 0.6, cx, cy - size * 0.3);
+      ctx.bezierCurveTo(cx, cy - size * 0.6, cx + size * 0.5, cy - size * 0.6, cx + size * 0.5, cy - size * 0.25);
+      ctx.bezierCurveTo(cx + size * 0.5, cy, cx, cy, cx, cy + size * 0.3);
+      ctx.closePath();
+    }
+
+    class HeartPiece {
+      constructor() {
+        this.x     = rand(canvas.width * 0.15, canvas.width * 0.85);
+        this.y     = rand(canvas.height * 0.3, canvas.height * 0.7);
+        this.vx    = rand(-3, 3);
+        this.vy    = rand(-12, -5);
+        this.size  = rand(10, 26);
+        this.color = CONFIG.heartColors[Math.floor(Math.random() * CONFIG.heartColors.length)];
+        this.angle = rand(-0.4, 0.4);
+        this.spin  = rand(-0.06, 0.06);
+        this.life  = 1;
+        this.decay = rand(0.007, 0.015);
+        this.type  = "heart";
+      }
+      update() {
+        this.vy += 0.18;
+        this.vx *= 0.99;
+        this.x  += this.vx;
+        this.y  += this.vy;
+        this.angle += this.spin;
+        this.life  -= this.decay;
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        heartPath(ctx, 0, 0, this.size);
+        ctx.fillStyle = this.color;
+        ctx.fill();
+        ctx.restore();
+      }
+      get dead() { return this.life <= 0 || this.y > canvas.height + 60; }
+    }
+
+    class WordPiece {
+      constructor() {
+        this.text  = CONFIG.wordParticles[Math.floor(Math.random() * CONFIG.wordParticles.length)];
+        this.x     = rand(canvas.width * 0.1, canvas.width * 0.9);
+        this.y     = rand(canvas.height * 0.2, canvas.height * 0.75);
+        this.vx    = rand(-1.5, 1.5);
+        this.vy    = rand(-6, -2);
+        this.size  = rand(13, 22);
+        this.angle = rand(-0.2, 0.2);
+        this.life  = 1;
+        this.decay = rand(0.006, 0.012);
+        this.type  = "word";
+      }
+      update() {
+        this.vy += 0.05;
+        this.vx *= 0.98;
+        this.x  += this.vx;
+        this.y  += this.vy;
+        this.life -= this.decay;
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.font = `italic ${this.size}px Georgia, serif`;
+        ctx.fillStyle = CONFIG.wordColor;
+        ctx.textAlign = "center";
+        ctx.shadowColor = "#ff4d6d";
+        ctx.shadowBlur  = 8;
+        ctx.fillText(this.text, 0, 0);
+        ctx.restore();
+      }
+      get dead() { return this.life <= 0 || this.y > canvas.height + 60; }
+    }
+
+    function launch() {
+      for (let i = 0; i < CONFIG.particleCount; i++) {
+        pieces.push(new HeartPiece());
+      }
+      const wordCount = Math.floor(CONFIG.particleCount / 6);
+      for (let i = 0; i < wordCount; i++) {
+        pieces.push(new WordPiece());
+      }
+      if (!raf) loop();
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      pieces = pieces.filter(p => !p.dead);
+      pieces.forEach(p => { p.update(); p.draw(ctx); });
+      raf = pieces.length ? requestAnimationFrame(loop) : null;
+    }
+
+    const btn     = $("love-btn");
+    const counter = $("counter");
+
+    btn.addEventListener("click", () => {
+      launch();
+      count++;
+      counter.textContent = CONFIG.counterLabel(count);
+      counter.classList.add("lit");
+    });
+
+    btn.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.click(); }
+    });
+  })();
+</script>
+</body>
+</html>
