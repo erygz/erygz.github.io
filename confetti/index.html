@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confetti Button</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #0f0f1a;
+      font-family: system-ui, -apple-system, sans-serif;
+      overflow: hidden;
+      position: relative;
+    }
+
+    canvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    .card {
+      position: relative;
+      z-index: 20;
+      text-align: center;
+      padding: 3rem 2.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 24px;
+      backdrop-filter: blur(12px);
+      max-width: 420px;
+      width: calc(100% - 2rem);
+    }
+
+    .emoji {
+      font-size: clamp(3rem, 10vw, 5rem);
+      display: block;
+      margin-bottom: 1rem;
+      transition: transform 0.15s ease;
+    }
+
+    .card:has(#confetti-btn:active) .emoji {
+      transform: scale(1.2) rotate(-10deg);
+    }
+
+    h1 {
+      font-size: clamp(1.5rem, 5vw, 2rem);
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 0.5rem;
+      letter-spacing: -0.02em;
+    }
+
+    p {
+      color: rgba(255, 255, 255, 0.5);
+      font-size: 0.95rem;
+      margin-bottom: 2rem;
+      line-height: 1.5;
+    }
+
+    #confetti-btn {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.9rem 2.5rem;
+      font-size: 1.1rem;
+      font-weight: 700;
+      font-family: inherit;
+      color: #0f0f1a;
+      background: linear-gradient(135deg, #f9c74f, #f3722c, #f94144, #a855f7);
+      background-size: 300% 300%;
+      border: none;
+      border-radius: 100px;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      animation: gradientShift 4s ease infinite;
+    }
+
+    @keyframes gradientShift {
+      0%   { background-position: 0% 50%; }
+      50%  { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    #confetti-btn:hover {
+      transform: translateY(-2px) scale(1.04);
+      box-shadow: 0 8px 32px rgba(249, 65, 68, 0.4);
+    }
+
+    #confetti-btn:active {
+      transform: translateY(0) scale(0.97);
+      box-shadow: none;
+    }
+
+    #confetti-btn:focus-visible {
+      outline: 3px solid #f9c74f;
+      outline-offset: 4px;
+    }
+
+    #counter {
+      margin-top: 1.5rem;
+      font-size: 0.85rem;
+      color: rgba(255, 255, 255, 0.35);
+      min-height: 1.2em;
+      transition: color 0.3s;
+    }
+
+    #counter.lit {
+      color: rgba(255, 255, 255, 0.6);
+    }
+
+    .star {
+      position: fixed;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 1;
+      opacity: 0.15;
+      animation: twinkle var(--d) ease-in-out infinite alternate;
+    }
+
+    @keyframes twinkle {
+      from { opacity: 0.05; }
+      to   { opacity: 0.35; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- =====================================================================
+     EDITABLE CONTENT — change these to customise the page
+===================================================================== -->
+<script>
+  const CONFIG = {
+    emoji:        "🎉",
+    heading:      "Press the button!",
+    subtext:      "Go on. You know you want to.",
+    buttonLabel:  "🎊 Throw Confetti",
+    counterLabel: (n) => n === 1 ? "1 celebration so far!" : `${n} celebrations and counting!`,
+    particleCount: 180,
+    colors: ["#f94144","#f3722c","#f9c74f","#90be6d","#43aa8b","#577590","#a855f7","#ec4899","#fff"],
+  };
+</script>
+<!-- ===================================================================== -->
+
+<canvas id="canvas" aria-hidden="true"></canvas>
+
+<main class="card" role="main">
+  <span class="emoji" aria-hidden="true" id="hero-emoji"></span>
+  <h1 id="heading"></h1>
+  <p id="subtext"></p>
+  <button id="confetti-btn" aria-label="Throw confetti"></button>
+  <div id="counter" aria-live="polite" aria-atomic="true"></div>
+</main>
+
+<script>
+  (function () {
+    const $ = id => document.getElementById(id);
+
+    $("hero-emoji").textContent = CONFIG.emoji;
+    $("heading").textContent    = CONFIG.heading;
+    $("subtext").textContent    = CONFIG.subtext;
+    $("confetti-btn").textContent = CONFIG.buttonLabel;
+
+    const canvas = $("canvas");
+    const ctx    = canvas.getContext("2d");
+    let pieces   = [];
+    let raf      = null;
+    let count    = 0;
+
+    function resize() {
+      canvas.width  = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    function rand(min, max) { return Math.random() * (max - min) + min; }
+
+    const SHAPES = ["rect", "circle", "strip"];
+
+    class Piece {
+      constructor() { this.reset(true); }
+      reset(fresh) {
+        this.x  = rand(0, canvas.width);
+        this.y  = fresh ? rand(-100, -10) : rand(-100, -10);
+        this.vx = rand(-2, 2);
+        this.vy = rand(3, 8);
+        this.angle  = rand(0, Math.PI * 2);
+        this.spin   = rand(-0.15, 0.15);
+        this.size   = rand(7, 14);
+        this.color  = CONFIG.colors[Math.floor(Math.random() * CONFIG.colors.length)];
+        this.shape  = SHAPES[Math.floor(Math.random() * SHAPES.length)];
+        this.wobble = rand(0, Math.PI * 2);
+        this.wobbleSpeed = rand(0.05, 0.12);
+        this.life   = 1;
+        this.decay  = rand(0.008, 0.018);
+      }
+      update() {
+        this.wobble += this.wobbleSpeed;
+        this.vx += Math.sin(this.wobble) * 0.1;
+        this.vy += 0.12;
+        this.vx *= 0.99;
+        this.x  += this.vx;
+        this.y  += this.vy;
+        this.angle += this.spin;
+        this.life  -= this.decay;
+      }
+      draw(ctx) {
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, this.life);
+        ctx.translate(this.x, this.y);
+        ctx.rotate(this.angle);
+        ctx.fillStyle = this.color;
+        if (this.shape === "rect") {
+          ctx.fillRect(-this.size / 2, -this.size / 4, this.size, this.size / 2);
+        } else if (this.shape === "circle") {
+          ctx.beginPath();
+          ctx.arc(0, 0, this.size / 2.5, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          ctx.fillRect(-this.size / 2, -this.size / 6, this.size, this.size / 3);
+        }
+        ctx.restore();
+      }
+      get dead() { return this.life <= 0 || this.y > canvas.height + 40; }
+    }
+
+    function launch() {
+      for (let i = 0; i < CONFIG.particleCount; i++) {
+        const p = new Piece();
+        p.x  = rand(canvas.width * 0.2, canvas.width * 0.8);
+        p.y  = rand(canvas.height * 0.2, canvas.height * 0.5);
+        p.vy = rand(-14, -6);
+        p.vx = rand(-8, 8);
+        p.life = 1;
+        p.decay = rand(0.005, 0.012);
+        pieces.push(p);
+      }
+      if (!raf) loop();
+    }
+
+    function loop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      pieces = pieces.filter(p => !p.dead);
+      pieces.forEach(p => { p.update(); p.draw(ctx); });
+      raf = pieces.length ? requestAnimationFrame(loop) : null;
+    }
+
+    const btn     = $("confetti-btn");
+    const counter = $("counter");
+
+    btn.addEventListener("click", () => {
+      launch();
+      count++;
+      counter.textContent = CONFIG.counterLabel(count);
+      counter.classList.add("lit");
+    });
+
+    btn.addEventListener("keydown", e => {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); btn.click(); }
+    });
+
+    for (let i = 0; i < 60; i++) {
+      const s = document.createElement("div");
+      s.className = "star";
+      const size = rand(1, 3);
+      s.style.cssText = `
+        width:${size}px; height:${size}px;
+        left:${rand(0,100)}vw; top:${rand(0,100)}vh;
+        background:#fff; --d:${rand(2,6).toFixed(1)}s;
+      `;
+      document.body.appendChild(s);
+    }
+  })();
+</script>
+</body>
+</html>
